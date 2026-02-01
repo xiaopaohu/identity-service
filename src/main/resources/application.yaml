@@ -1,0 +1,63 @@
+spring:
+  application:
+    name: identity-service
+
+  profiles:
+    active: local
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: pthao101023@gmail.com
+    password: lpybzyocjvuinqtz
+    protocol: smtp
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://localhost:5432/identity_db
+    username: postgres
+    password: Djjcute@147258369
+
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+      max-lifetime: 1200000
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate.jdbc.hibernate.jdbc.batch_size: 30
+      hibernate.jdbc.hibernate.jdbc.jdbc.fetch_size: 100
+      dialect: org.hibernate.dialect.PostgreSQLDialect
+      hibernate.format_sql: true
+
+server:
+  port: 8080
+  servlet:
+    context-path: /identity
+
+# Logging
+logging:
+  level:
+    com.zaxxer.hikari: DEBUG
+    root: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: DEBUG
+    org.springframework.jdbc.datasource: DEBUG
+    org.springframework.security: DEBUG
