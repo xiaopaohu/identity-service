@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -35,10 +35,10 @@ public class RefreshToken {
     String ipAddress;
 
     @Column(name = "expires_at", nullable = false)
-    LocalDateTime expiresAt;
+    Instant expiresAt;
 
     boolean revoked;
 
     @Column(name = "created_at", insertable = false, updatable = false)
-    LocalDateTime createdAt;
+    Instant createdAt;
 }

@@ -5,7 +5,9 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
@@ -50,16 +52,16 @@ public class User {
     LocalDateTime lockedUntil;
 
     @Column(name = "last_login_at")
-    LocalDateTime lastLoginAt;
+    Instant lastLoginAt;
 
     @Column(name = "created_at", insertable = false, updatable = false)
-    LocalDateTime createdAt;
+    Instant createdAt;
 
     @Column(name = "updated_at")
-    LocalDateTime updatedAt;
+    Instant updatedAt;
 
     @Column(name = "deleted_at")
-    LocalDateTime deletedAt;
+    Instant deletedAt;
 
     @Column(name = "deleted_by_admin")
     boolean deletedByAdmin;
@@ -69,4 +71,17 @@ public class User {
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     Set<UserRole> userRoles;
+
+    public void addRole(Role role) {
+        if (userRoles == null) {
+            userRoles = new HashSet<>();
+        }
+        UserRole userRole = UserRole.builder()
+//                .id(new UserRoleId(this.id, role.getId()))
+                .user(this)
+                .role(role)
+                .build();
+        userRole.setId(new UserRoleId(this.id, role.getId()));
+        userRoles.add(userRole);
+    }
 }

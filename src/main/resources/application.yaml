@@ -52,6 +52,10 @@ server:
   servlet:
     context-path: /identity
 
+app:
+  url:
+    base: http://localhost:8080
+
 # Logging
 logging:
   level:

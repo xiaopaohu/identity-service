@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "verification_tokens")
@@ -27,8 +27,8 @@ public class VerificationToken {
     User user;
 
     @Column(name = "expiry_date", nullable = false)
-    LocalDateTime expiryDate;
+    Instant expiryDate;
 
     @Column(name = "created_at", insertable = false, updatable = false)
-    LocalDateTime createdAt;
+    Instant createdAt;
 }

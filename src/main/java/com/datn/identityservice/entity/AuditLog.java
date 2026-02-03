@@ -7,7 +7,7 @@ import jakarta.persistence.Table;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -20,25 +20,25 @@ import java.util.UUID;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class AuditLog {
     @Id
-    private UUID id;
+    UUID id;
 
     @Column(nullable = false, length = 100)
-    private String action;
+    String action;
 
     @Column(name = "actor_id", nullable = false)
-    private UUID actorId;
+    UUID actorId;
 
     @Column(name = "target_id")
-    private UUID targetId;
+    UUID targetId;
 
-    private String description;
+    String description;
 
     @Column(name = "ip_address", length = 50)
-    private String ipAddress;
+    String ipAddress;
 
     @Column(name = "user_agent")
-    private String userAgent;
+    String userAgent;
 
     @Column(name = "created_at", insertable = false, updatable = false)
-    private LocalDateTime createdAt;
+    Instant createdAt;
 }
