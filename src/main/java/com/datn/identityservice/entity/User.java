@@ -6,7 +6,6 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -21,8 +20,8 @@ import java.util.UUID;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class User {
     @Id
-    @GeneratedValue
     @org.hibernate.annotations.UuidGenerator
+    @GeneratedValue
     @Column(name = "id", updatable = false, nullable = false)
     UUID id;
 
@@ -49,7 +48,7 @@ public class User {
     int failedAttemptCount;
 
     @Column(name = "locked_until")
-    LocalDateTime lockedUntil;
+    Instant lockedUntil;
 
     @Column(name = "last_login_at")
     Instant lastLoginAt;

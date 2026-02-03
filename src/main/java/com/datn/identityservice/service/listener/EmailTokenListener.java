@@ -1,7 +1,7 @@
 package com.datn.identityservice.service.listener;
 
 import com.datn.identityservice.configuration.AppUrlProperties;
-import com.datn.identityservice.event.RegistrationCompleteEvent;
+import com.datn.identityservice.dto.event.RegistrationCompleteEvent;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -17,13 +17,13 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
-public class RegistrationEventListener {
+public class EmailTokenListener {
 
     JavaMailSender mailSender;
     AppUrlProperties appUrl;
 
     @Async
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT) // Chỉ chạy sau khi DB đã lưu thành công
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleRegistrationEvent(RegistrationCompleteEvent event) {
         log.info("Transaction đã commit. Bắt đầu gửi email tới: {}", event.getEmail());
 

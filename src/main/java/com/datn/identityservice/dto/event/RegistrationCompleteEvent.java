@@ -1,4 +1,4 @@
-package com.datn.identityservice.event;
+package com.datn.identityservice.dto.event;
 
 import lombok.AccessLevel;
 import lombok.Getter;

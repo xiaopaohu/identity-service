@@ -55,6 +55,9 @@ server:
 app:
   url:
     base: http://localhost:8080
+  telegram:
+    bot-token: "7861163277:AAHCfukhb5i_ueaFMlfUsSolqH1og15OsIQ"
+    chat-id: "6118213308"
 
 # Logging
 logging:

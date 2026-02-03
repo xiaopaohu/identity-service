@@ -2,6 +2,7 @@ package com.datn.identityservice.mapper;
 
 
 import com.datn.identityservice.dto.request.EmailRegisterRequest;
+import com.datn.identityservice.dto.request.PhoneRegisterRequest;
 import com.datn.identityservice.dto.response.UserResponse;
 import com.datn.identityservice.entity.User;
 import com.datn.identityservice.entity.UserRole;
@@ -24,11 +25,11 @@ public interface UserMapper {
     @Mapping(target = "userRoles", ignore = true)
     User toUser(EmailRegisterRequest request);
 
-//    @Mapping(target = "id", ignore = true)
-//    @Mapping(target = "passwordHash", ignore = true)
-//    @Mapping(target = "status", constant = "ACTIVE")
-//    @Mapping(target = "userRoles", ignore = true)
-//    User toUser(PhoneRegisterRequest request);
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "passwordHash", ignore = true)
+    @Mapping(target = "status", constant = "ACTIVE")
+    @Mapping(target = "userRoles", ignore = true)
+    User toUser(PhoneRegisterRequest request);
 
 //    // 2. Luồng Admin tạo Account (Có gán Role)
 //    @Mapping(target = "id", ignore = true)
