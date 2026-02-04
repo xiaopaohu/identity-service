@@ -68,3 +68,7 @@ logging:
     org.hibernate.orm.jdbc.bind: DEBUG
     org.springframework.jdbc.datasource: DEBUG
     org.springframework.security: DEBUG
+
+
+jwt:
+  signerKey: "ZJG37U8YWFcYH8jNE0p9QUqtS7yMlpolWnrO7XnNNwA"

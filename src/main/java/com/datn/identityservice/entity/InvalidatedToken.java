@@ -21,6 +21,6 @@ public class InvalidatedToken {
     @Id
     String id;
 
-    @Column(name = "expiry_at", nullable = false)
+    @Column(name = "expires_at", nullable = false)
     Instant expiryAt;
 }

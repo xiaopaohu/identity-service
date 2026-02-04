@@ -18,14 +18,14 @@ public interface VerificationOtpCodeRepository extends JpaRepository<Verificatio
 
     // 2. Tìm OTP hợp lệ theo mã OTP + user (dùng khi verify)
     // Chỉ lấy OTP còn hạn, chưa dùng, chưa bị khóa
-    Optional<VerificationOtpCode> findByOtpCodeAndUserAndExpiryDateAfterAndIsUsedFalseAndLockedUntilLessThan(
+    Optional<VerificationOtpCode> findByOtpCodeAndUserAndExpiryAtAfterAndIsUsedFalseAndLockedUntilLessThan(
             String otpCode,
             User user,
             Instant now,
             Instant nowForLock
     );
 
-    boolean existsByUserAndExpiryDateAfterAndIsUsedFalse(User user, Instant now);
+    boolean existsByUserAndExpiryAtAfterAndIsUsedFalse(User user, Instant now);
 
     @Modifying
     void deleteByUser(User user);

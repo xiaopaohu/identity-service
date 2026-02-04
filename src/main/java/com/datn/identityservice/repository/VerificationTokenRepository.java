@@ -12,7 +12,7 @@ import java.util.Optional;
 public interface VerificationTokenRepository extends JpaRepository<VerificationToken, Long> {
     Optional<VerificationToken> findByToken(String token);
 
-    void deleteByExpiryDateBefore(LocalDateTime now);
+    void deleteByExpiryAtBefore(LocalDateTime now);
 
     void deleteByUser(User user); // Để dọn sạch nếu user đăng ký lại
 }
