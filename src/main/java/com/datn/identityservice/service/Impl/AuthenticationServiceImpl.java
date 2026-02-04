@@ -2,20 +2,19 @@ package com.datn.identityservice.service.Impl;
 
 import com.datn.identityservice.dto.event.RegistrationCompleteEvent;
 import com.datn.identityservice.dto.event.SmsOtpEvent;
-import com.datn.identityservice.dto.request.EmailRegisterRequest;
-import com.datn.identityservice.dto.request.PhoneRegisterRequest;
-import com.datn.identityservice.entity.Role;
-import com.datn.identityservice.entity.User;
-import com.datn.identityservice.entity.VerificationOtpCode;
-import com.datn.identityservice.entity.VerificationToken;
+import com.datn.identityservice.dto.request.*;
+import com.datn.identityservice.dto.response.AuthenticationResponse;
+import com.datn.identityservice.dto.response.IntrospectResponse;
+import com.datn.identityservice.entity.*;
+import com.datn.identityservice.mapper.AuthenticationMapper;
 import com.datn.identityservice.mapper.UserMapper;
-import com.datn.identityservice.repository.RoleRepository;
-import com.datn.identityservice.repository.UserRepository;
-import com.datn.identityservice.repository.VerificationOtpCodeRepository;
-import com.datn.identityservice.repository.VerificationTokenRepository;
+import com.datn.identityservice.repository.*;
 import com.datn.identityservice.service.AuthenticationService;
+import com.datn.identityservice.service.JwtProvider;
 import com.datn.identityservice.service.OtpLockoutManager;
 import com.datn.identityservice.validator.RegisterValidator;
+import com.nimbusds.jose.JOSEException;
+import com.nimbusds.jwt.SignedJWT;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -26,8 +25,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.text.ParseException;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Date;
 import java.util.UUID;
 
 @Service
@@ -43,7 +45,11 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     VerificationTokenRepository tokenRepository;
     VerificationOtpCodeRepository verificationOtpCodeRepository;
     UserMapper userMapper;
+    AuthenticationMapper authenticationMapper;
     PasswordEncoder passwordEncoder;
+    JwtProvider jwtProvider;
+    InvalidatedTokenRepository invalidatedTokenRepository;
+    RefreshTokenRepository refreshTokenRepository;
     //    JavaMailSender mailSender;
     RegisterValidator registerValidator;
     ApplicationEventPublisher eventPublisher;
@@ -81,7 +87,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         VerificationToken verificationToken = tokenRepository.findByToken(token)
                 .orElseThrow(() -> new RuntimeException("INVALID_TOKEN"));
 
-        if (verificationToken.getExpiryDate().isBefore(Instant.now())) {
+        if (verificationToken.getExpiryAt().isBefore(Instant.now())) {
             tokenRepository.delete(verificationToken);
             throw new RuntimeException("TOKEN_EXPIRED");
         }
@@ -142,7 +148,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .findTopByUserAndIsUsedFalseOrderByCreatedAtDesc(user)
                 .orElseThrow(() -> new RuntimeException("NO_ACTIVE_OTP_FOUND"));
 
-        if (latestOtp.getExpiryDate().isBefore(now) || latestOtp.getAttemptCount() >= 5) {
+        if (latestOtp.getExpiryAt().isBefore(now) || latestOtp.getAttemptCount() >= 5) {
             latestOtp.setUsed(true);
             verificationOtpCodeRepository.save(latestOtp);
             throw new RuntimeException("OTP_INVALID_OR_EXPIRED");
@@ -207,7 +213,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         VerificationOtpCode newOtp = VerificationOtpCode.builder()
                 .otpCode(newCode)
                 .user(user)
-                .expiryDate(now.plus(Duration.ofMinutes(2)))
+                .expiryAt(now.plus(Duration.ofMinutes(2)))
                 .resendCount(lastEntry.getResendCount() + 1)
                 .attemptCount(0)
                 .lastResendAt(now)
@@ -221,6 +227,92 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         eventPublisher.publishEvent(new SmsOtpEvent(phone, newCode));
     }
 
+    @Override
+    public AuthenticationResponse authenticate(AuthenticationRequest request) {
+        User user = userRepository.findByEmailOrPhone(request.getLoginIdentifier())
+                .orElseThrow(() -> new RuntimeException("USER_NOT_FOUND"));
+        if (!"ACTIVE".equals(user.getStatus())) {
+            throw new RuntimeException("ACCOUNT_STATUS_INVALID_" + user.getStatus());
+        }
+
+        if (user.getLockedUntil() != null && user.getLockedUntil().isAfter(Instant.now())) {
+            throw new RuntimeException("ACCOUNT_TEMPORARILY_LOCKED");
+        }
+        boolean authenticated = passwordEncoder.matches(request.getPassword(), user.getPasswordHash());
+
+        if (!authenticated) {
+            throw new RuntimeException("INVALID_PASSWORD");
+        }
+        String accessToken = jwtProvider.generateToken(user, 900);
+        String refreshTokenStr = jwtProvider.generateToken(user, jwtProvider.getRefreshTokenExpiry());
+
+        refreshTokenRepository.deleteByUser(user);
+        RefreshToken refreshTokenEntity = RefreshToken.builder()
+                .user(user)
+                .token(refreshTokenStr)
+                .expiresAt(Instant.now().plus(7, ChronoUnit.DAYS))
+                .build();
+        refreshTokenRepository.save(refreshTokenEntity);
+
+        return authenticationMapper.toAuthenticationResponse(user, accessToken, refreshTokenStr, true);
+    }
+
+    @Override
+    public AuthenticationResponse refreshToken(String requestRefreshToken) {
+        RefreshToken refreshToken = refreshTokenRepository.findByToken(requestRefreshToken)
+                .orElseThrow(() -> new RuntimeException("INVALID_TOKEN"));
+
+        if (refreshToken.getExpiresAt().isBefore(Instant.now())) {
+            refreshTokenRepository.delete(refreshToken);
+            throw new RuntimeException("EXPIRED_TOKEN");
+        }
+        User user = refreshToken.getUser();
+        String newAccessToken = jwtProvider.generateToken(user, 900);
+        return authenticationMapper.toAuthenticationResponse(user, newAccessToken, requestRefreshToken, true);
+    }
+
+
+    @Override
+    public IntrospectResponse introspect(IntrospectRequest request) {
+        var token = request.getToken();
+        boolean isValid = true;
+
+        try {
+            SignedJWT signedJWT = jwtProvider.verifyToken(token);
+            String jid = signedJWT.getJWTClaimsSet().getJWTID();
+
+            if (invalidatedTokenRepository.existsById(jid)) {
+                isValid = false;
+            }
+        } catch (Exception e) {
+            isValid = false;
+        }
+
+        return IntrospectResponse.builder()
+                .valid(isValid)
+                .build();
+    }
+
+    @Override
+    public void logout(LogoutRequest request) throws ParseException, JOSEException {
+        try {
+            var signedToken = jwtProvider.verifyToken(request.getToken());
+
+            String jid = signedToken.getJWTClaimsSet().getJWTID();
+            Date expiryTime = signedToken.getJWTClaimsSet().getExpirationTime();
+
+            InvalidatedToken invalidatedToken = InvalidatedToken.builder()
+                    .id(jid)
+                    .expiryAt(expiryTime.toInstant())
+                    .build();
+
+            invalidatedTokenRepository.save(invalidatedToken);
+
+        } catch (RuntimeException e) {
+            log.info("Token already expired, no need to invalidate");
+        }
+    }
+
     /*============================================================================================================*/
     private String generateAndSaveToken(User user) {
 
@@ -228,7 +320,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         VerificationToken verificationToken = VerificationToken.builder()
                 .token(token)
                 .user(user)
-                .expiryDate(Instant.now().plus(Duration.ofHours(24)))
+                .expiryAt(Instant.now().plus(Duration.ofHours(24)))
                 .build();
 
         tokenRepository.save(verificationToken);
@@ -247,7 +339,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         VerificationOtpCode verificationOtpCode = VerificationOtpCode.builder()
                 .otpCode(otpCode)
                 .user(user)
-                .expiryDate(Instant.now().plus(Duration.ofSeconds(120)))
+                .expiryAt(Instant.now().plus(Duration.ofSeconds(120)))
                 .attemptCount(0)
                 .resendCount(0)
                 .lastResendAt(Instant.now())

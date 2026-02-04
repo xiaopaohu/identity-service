@@ -1,13 +1,14 @@
 package com.datn.identityservice.mapper;
 
 
+import com.datn.identityservice.dto.request.AdminCreateUserRequest;
+import com.datn.identityservice.dto.request.AdminUserUpdateRequest;
 import com.datn.identityservice.dto.request.EmailRegisterRequest;
 import com.datn.identityservice.dto.request.PhoneRegisterRequest;
 import com.datn.identityservice.dto.response.UserResponse;
 import com.datn.identityservice.entity.User;
 import com.datn.identityservice.entity.UserRole;
-import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
+import org.mapstruct.*;
 
 import java.util.Collections;
 import java.util.Set;
@@ -31,15 +32,17 @@ public interface UserMapper {
     @Mapping(target = "userRoles", ignore = true)
     User toUser(PhoneRegisterRequest request);
 
-//    // 2. Luồng Admin tạo Account (Có gán Role)
-//    @Mapping(target = "id", ignore = true)
-//    @Mapping(target = "passwordHash", ignore = true)
-//    @Mapping(target = "userRoles", ignore = true)
-//    // Cần xử lý riêng tại Service để map Role từ DB
-//    User toUser(AdminCreateAccountRequest request);
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "passwordHash", ignore = true)
+    @Mapping(target = "userRoles", ignore = true)
+    User toUser(AdminCreateUserRequest request);
 
+    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
+    @Mapping(target = "userRoles", ignore = true)
+    @Mapping(target = "passwordHash", ignore = true)
+    void updateUser(@MappingTarget User user, AdminUserUpdateRequest request);
 
-    @Mapping(target = "roles", source = "userRoles")
+    @Mapping(target = "roles", expression = "java(user.getUserRoles().stream().map(ur -> ur.getRole().getName()).collect(java.util.stream.Collectors.toSet()))")
     UserResponse toUserResponse(User user);
 
     default Set<String> mapUserRolesToNames(Set<UserRole> userRoles) {

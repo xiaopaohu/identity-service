@@ -1,6 +1,7 @@
 package com.datn.identityservice.repository;
 
 import com.datn.identityservice.entity.RefreshToken;
+import com.datn.identityservice.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -16,6 +17,8 @@ import java.util.UUID;
 public interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID> {
 
     Optional<RefreshToken> findByToken(String token);
+
+    void deleteByUser(User user);
 
     // Lấy danh sách thiết bị đang đăng nhập của User
     List<RefreshToken> findAllByUserIdAndRevokedFalseAndExpiresAtAfter(UUID userId, LocalDateTime now);

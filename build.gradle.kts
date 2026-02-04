@@ -31,8 +31,10 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-mail")
+    implementation("com.nimbusds:nimbus-jose-jwt:9.37.4")
+    implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
-    
+
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok") /*--1--*/
 

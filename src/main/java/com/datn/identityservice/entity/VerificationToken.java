@@ -26,8 +26,8 @@ public class VerificationToken {
     @JoinColumn(name = "user_id", nullable = false)
     User user;
 
-    @Column(name = "expiry_date", nullable = false)
-    Instant expiryDate;
+    @Column(name = "expiry_at", nullable = false)
+    Instant expiryAt;
 
     @Column(name = "created_at", insertable = false, updatable = false)
     Instant createdAt;
