@@ -82,6 +82,10 @@ public class UserServiceImpl implements UserService {
     public void updatePassword(PasswordUpdateRequest request) {
         String currentId = SecurityUtils.getCurrentUserId();
 
+        if (currentId == null || currentId.equals("anonymousUser")) {
+            throw new RuntimeException("UNAUTHENTICATED");
+        }
+
         User user = userRepository.findById(UUID.fromString(currentId))
                 .orElseThrow(() -> new RuntimeException("USER_NOT_FOUND"));
         if (!passwordEncoder.matches(request.getOldPassword(), user.getPasswordHash())) {
