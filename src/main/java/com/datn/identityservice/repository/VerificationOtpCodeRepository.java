@@ -2,6 +2,7 @@ package com.datn.identityservice.repository;
 
 import com.datn.identityservice.entity.User;
 import com.datn.identityservice.entity.VerificationOtpCode;
+import com.datn.identityservice.enums.OtpType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.stereotype.Repository;
@@ -15,6 +16,10 @@ public interface VerificationOtpCodeRepository extends JpaRepository<Verificatio
     Optional<VerificationOtpCode> findTopByUserAndIsUsedFalseOrderByCreatedAtDesc(User user);
 
     Optional<VerificationOtpCode> findTopByUserOrderByCreatedAtDesc(User user);
+
+    Optional<VerificationOtpCode> findTopByUserAndTypeAndIsUsedFalseOrderByCreatedAtDesc(User user, OtpType type);
+
+    Optional<VerificationOtpCode> findTopByUserAndTypeOrderByCreatedAtDesc(User user, OtpType type);
 
     // 2. Tìm OTP hợp lệ theo mã OTP + user (dùng khi verify)
     // Chỉ lấy OTP còn hạn, chưa dùng, chưa bị khóa

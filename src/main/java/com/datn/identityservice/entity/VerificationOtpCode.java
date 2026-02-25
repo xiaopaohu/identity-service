@@ -1,5 +1,6 @@
 package com.datn.identityservice.entity;
 
+import com.datn.identityservice.enums.OtpType;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -27,6 +28,10 @@ public class VerificationOtpCode {
 
     @Column(name = "otp_code", nullable = false, length = 6)
     String otpCode;
+
+    @Column(name = "type", nullable = false)
+    @Enumerated(EnumType.STRING)
+    OtpType type;
 
     @Column(name = "expiry_at", nullable = false)
     Instant expiryAt;

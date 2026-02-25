@@ -1,7 +1,9 @@
 package com.datn.identityservice.service;
 
 import com.datn.identityservice.dto.request.AdminCreateUserRequest;
+import com.datn.identityservice.dto.request.AdminUserUpdateRequest;
 import com.datn.identityservice.dto.request.PasswordUpdateRequest;
+import com.datn.identityservice.dto.response.AdminUserResponse;
 import com.datn.identityservice.dto.response.UserResponse;
 
 import java.util.List;
@@ -16,5 +18,10 @@ public interface UserService {
 
     void updatePassword(PasswordUpdateRequest request);
 
-//    UserResponse adminUpdateUser(UUID userId, AdminUserUpdateRequest request);
+    // Admin cập nhật thông tin User
+    UserResponse updateUser(UUID userId, AdminUserUpdateRequest request);
+
+    void deleteUser(UUID id);
+
+    AdminUserResponse getAdminUserDetail(UUID id);
 }

@@ -3,9 +3,13 @@ package com.datn.identityservice.controller;
 
 import com.datn.identityservice.dto.request.*;
 import com.datn.identityservice.dto.request.verify.ResendOtpRequest;
+import com.datn.identityservice.dto.request.verify.VerifyOtpRequest;
 import com.datn.identityservice.dto.request.verify.VerifyPhoneRequest;
 import com.datn.identityservice.dto.response.ApiResponse;
 import com.datn.identityservice.dto.response.AuthenticationResponse;
+import com.datn.identityservice.dto.response.IntrospectResponse;
+import com.datn.identityservice.dto.response.UserResponse;
+import com.datn.identityservice.enums.OtpType;
 import com.datn.identityservice.service.AuthenticationService;
 import com.nimbusds.jose.JOSEException;
 import jakarta.validation.Valid;
@@ -46,13 +50,13 @@ public class AuthenticationController {
 
     @PostMapping("/verify-phone")
     public ApiResponse<String> verifyPhone(@RequestBody @Valid VerifyPhoneRequest request) {
-        authenticationService.verifyPhone(request.getPhone(), request.getOtpCode());
+        authenticationService.verifyOtp(request.getPhone(), request.getOtpCode(), OtpType.REGISTER);
         return ApiResponse.success("Số điện thoại đã được xác thực thành công!");
     }
 
     @PostMapping("/resend-otp")
     public ApiResponse<String> resendOtp(@RequestBody @Valid ResendOtpRequest request) {
-        authenticationService.resendOtp(request.getPhone());
+        authenticationService.resendOtp(request.getPhone(), OtpType.REGISTER);
         return ApiResponse.success("Mã OTP mới đã được gửi qua SMS!");
     }
 
@@ -72,6 +76,34 @@ public class AuthenticationController {
             throws ParseException, JOSEException {
         authenticationService.logout(request);
         return ApiResponse.success(null, "Logout successfully");
+    }
+
+    @PostMapping("/introspect")
+    public ApiResponse<IntrospectResponse> introspect(@RequestBody IntrospectRequest request) {
+        return ApiResponse.success(authenticationService.introspect(request), "Introspect successfully");
+    }
+
+    @PostMapping("/find-account")
+    public ApiResponse<UserResponse> findAccount(@RequestBody @Valid FindAccountRequest request) {
+        return ApiResponse.success(authenticationService.findUserForReset(request.getIdentifier()), "Account found");
+    }
+
+    @PostMapping("/send-otp-reset")
+    public ApiResponse<Void> sendOtpReset(@RequestBody @Valid SendOtpRequest request) {
+        authenticationService.sendOtpForReset(request);
+        return ApiResponse.success(null, "OTP sent");
+    }
+
+    @PostMapping("/verify-otp-reset")
+    public ApiResponse<Void> verifyOtpReset(@RequestBody @Valid VerifyOtpRequest request) {
+        authenticationService.verifyOtpForReset(request);
+        return ApiResponse.success(null, "OTP valid");
+    }
+
+    @PostMapping("/reset-password")
+    public ApiResponse<Void> resetPassword(@RequestBody @Valid ResetPasswordRequest request) {
+        authenticationService.resetPassword(request);
+        return ApiResponse.success(null, "Password reset successfully");
     }
 }
 

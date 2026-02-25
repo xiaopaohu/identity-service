@@ -1,11 +1,17 @@
 package com.datn.identityservice.service.Impl;
 
+import com.datn.identityservice.dto.event.EmailOtpEvent;
 import com.datn.identityservice.dto.event.RegistrationCompleteEvent;
 import com.datn.identityservice.dto.event.SmsOtpEvent;
 import com.datn.identityservice.dto.request.*;
+import com.datn.identityservice.dto.request.verify.VerifyOtpRequest;
 import com.datn.identityservice.dto.response.AuthenticationResponse;
 import com.datn.identityservice.dto.response.IntrospectResponse;
+import com.datn.identityservice.dto.response.UserResponse;
 import com.datn.identityservice.entity.*;
+import com.datn.identityservice.enums.OtpType;
+import com.datn.identityservice.exception.AppException;
+import com.datn.identityservice.exception.ErrorCode;
 import com.datn.identityservice.mapper.AuthenticationMapper;
 import com.datn.identityservice.mapper.UserMapper;
 import com.datn.identityservice.repository.*;
@@ -119,7 +125,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .orElseThrow(() -> new RuntimeException("ROLE_NOT_FOUND"));
         user.addRole(role);
 
-        String otpCode = generateAndSaveOtp(user);
+        String otpCode = generateAndSaveOtp(user, request.getPhone(), OtpType.REGISTER);
 
         log.info("The event for sending an OTP to the phone {} has been triggered!", user.getPhone());
         eventPublisher.publishEvent(new SmsOtpEvent(request.getPhone(), otpCode));
@@ -127,11 +133,11 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
     @Override
     @Transactional
-    public void verifyPhone(String phone, String otpCode) {
+    public void verifyOtp(String identifier, String otpCode, OtpType type) {
 //        String normalizedPhone = normalizePhone(phone);
 
-        User user = userRepository.findByPhone(phone)
-                .orElseThrow(() -> new RuntimeException("USER_NOT_REGISTERED"));
+        User user = userRepository.findByEmailOrPhone(identifier)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
         Instant now = Instant.now();
 
@@ -145,8 +151,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         }
 
         VerificationOtpCode latestOtp = verificationOtpCodeRepository
-                .findTopByUserAndIsUsedFalseOrderByCreatedAtDesc(user)
-                .orElseThrow(() -> new RuntimeException("NO_ACTIVE_OTP_FOUND"));
+                .findTopByUserAndTypeAndIsUsedFalseOrderByCreatedAtDesc(user, type)
+                .orElseThrow(() -> new AppException(ErrorCode.NO_ACTIVE_OTP_FOUND));
 
         if (latestOtp.getExpiryAt().isBefore(now) || latestOtp.getAttemptCount() >= 5) {
             latestOtp.setUsed(true);
@@ -155,13 +161,17 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         }
 
         if (latestOtp.getOtpCode().equals(otpCode)) {
-            user.setStatus("ACTIVE");
-            user.setFailedAttemptCount(0);
-            user.setLockedUntil(null);
-            userRepository.save(user);
+            if (type == OtpType.REGISTER) {
+                user.setStatus("ACTIVE");
+                user.setFailedAttemptCount(0);
+                user.setLockedUntil(null);
+                userRepository.save(user);
+            }
+            if (type == OtpType.FORGOT_PASSWORD) {
 
-            latestOtp.setUsed(true);
-            verificationOtpCodeRepository.save(latestOtp);
+                latestOtp.setUsed(true);
+                verificationOtpCodeRepository.save(latestOtp);
+            }
         } else {
             otpLockoutManager.recordFailedAttempt(latestOtp, user);
 
@@ -172,59 +182,43 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
     @Override
     @Transactional
-    public void resendOtp(String phone) {
-        User user = userRepository.findByPhone(phone)
-                .orElseThrow(() -> new RuntimeException("USER_NOT_FOUND"));
+    public void resendOtp(String identifier, OtpType type) {
+        User user = userRepository.findByEmailOrPhone(identifier)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
-        VerificationOtpCode lastEntry = verificationOtpCodeRepository
-                .findTopByUserOrderByCreatedAtDesc(user)
-                .orElseThrow(() -> new RuntimeException("NO_OTP_HISTORY"));
+        VerificationOtpCode lastOtp = verificationOtpCodeRepository
+                .findTopByUserAndTypeOrderByCreatedAtDesc(user, type)
+                .orElseThrow(() -> new AppException(ErrorCode.NO_OTP_HISTORY));
 
         Instant now = Instant.now();
 
-        if (lastEntry.getLastResendAt() != null) {
-            Instant nextAllowed = lastEntry.getLastResendAt().plus(Duration.ofMinutes(2));
+        if (lastOtp.getLastResendAt() != null) {
+            Instant nextAllowed = lastOtp.getLastResendAt().plus(Duration.ofMinutes(2));
             if (now.isBefore(nextAllowed)) {
                 long secondsLeft = Duration.between(now, nextAllowed).getSeconds();
                 throw new RuntimeException("COOLDOWN_ACTIVE_" + secondsLeft + "_SECONDS_LEFT");
             }
         }
 
-        if (lastEntry.getResendCount() >= 5) {
+        if (lastOtp.getResendCount() >= 5) {
             user.setStatus("BANNED");
             user.setLockedUntil(now.plus(Duration.ofHours(24)));
             userRepository.save(user);
             throw new RuntimeException("MAX_RESEND_BANNED_24H");
         }
 
-        VerificationOtpCode latestOtp = verificationOtpCodeRepository
-                .findTopByUserOrderByCreatedAtDesc(user)
-                .orElse(null);
+        String newCode = generateAndSaveOtp(user, identifier, type);
 
-        if (latestOtp != null && latestOtp.getLastResendAt() != null) {
-            Instant nextAllowed = latestOtp.getLastResendAt().plusSeconds(120);
-            if (now.isBefore(nextAllowed)) {
-                long secondsLeft = Duration.between(now, nextAllowed).getSeconds();
-                throw new RuntimeException("PLEASE_WAIT_BEFORE_RESEND_" + secondsLeft + "_SECONDS");
-            }
+        VerificationOtpCode currentOtp = verificationOtpCodeRepository
+                .findTopByUserAndTypeOrderByCreatedAtDesc(user, type).get();
+        currentOtp.setResendCount(lastOtp.getResendCount() + 1);
+        verificationOtpCodeRepository.save(currentOtp);
+
+        if (identifier.contains("@")) {
+            eventPublisher.publishEvent(new EmailOtpEvent(identifier, newCode));
+        } else {
+            eventPublisher.publishEvent(new SmsOtpEvent(identifier, newCode));
         }
-
-        String newCode = String.format("%06d", new SecureRandom().nextInt(900000) + 100000);
-        VerificationOtpCode newOtp = VerificationOtpCode.builder()
-                .otpCode(newCode)
-                .user(user)
-                .expiryAt(now.plus(Duration.ofMinutes(2)))
-                .resendCount(lastEntry.getResendCount() + 1)
-                .attemptCount(0)
-                .lastResendAt(now)
-                .isUsed(false)
-                .build();
-
-        verificationOtpCodeRepository.save(newOtp);
-
-        log.info("Resend OTP thành công cho phone: {}, lần thứ: {}", phone,
-                latestOtp != null ? latestOtp.getResendCount() + 1 : 1);
-        eventPublisher.publishEvent(new SmsOtpEvent(phone, newCode));
     }
 
     @Override
@@ -238,11 +232,28 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         if (user.getLockedUntil() != null && user.getLockedUntil().isAfter(Instant.now())) {
             throw new RuntimeException("ACCOUNT_TEMPORARILY_LOCKED");
         }
-        boolean authenticated = passwordEncoder.matches(request.getPassword(), user.getPasswordHash());
 
+        boolean authenticated = passwordEncoder.matches(request.getPassword(), user.getPasswordHash());
         if (!authenticated) {
-            throw new RuntimeException("INVALID_PASSWORD");
+            int newAttempts = user.getFailedAttemptCount() + 1;
+            user.setFailedAttemptCount(newAttempts);
+
+            if (newAttempts >= 5) {
+                user.setLockedUntil(Instant.now().plus(30, ChronoUnit.MINUTES));
+                userRepository.save(user);
+                throw new AppException(ErrorCode.ACCOUNT_TEMPORARILY_LOCKED);
+            }
+
+            userRepository.save(user);
+            throw new AppException(ErrorCode.INVALID_PASSWORD);
         }
+
+        if (user.getFailedAttemptCount() > 0 || user.getLockedUntil() != null) {
+            user.setFailedAttemptCount(0);
+            user.setLockedUntil(null);
+            userRepository.save(user);
+        }
+
         String accessToken = jwtProvider.generateToken(user, 900);
         String refreshTokenStr = jwtProvider.generateToken(user, jwtProvider.getRefreshTokenExpiry());
 
@@ -276,20 +287,32 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     public IntrospectResponse introspect(IntrospectRequest request) {
         var token = request.getToken();
         boolean isValid = true;
+        String scope = null;
+        String subject = null;
 
         try {
             SignedJWT signedJWT = jwtProvider.verifyToken(token);
-            String jid = signedJWT.getJWTClaimsSet().getJWTID();
+
+            var claimsSet = signedJWT.getJWTClaimsSet();
+            String jid = claimsSet.getJWTID();
 
             if (invalidatedTokenRepository.existsById(jid)) {
                 isValid = false;
             }
+
+            if (isValid) {
+                scope = claimsSet.getStringClaim("scope");
+                subject = claimsSet.getSubject();
+            }
         } catch (Exception e) {
             isValid = false;
+            log.error("Introspect failed: {}", e.getMessage());
         }
 
         return IntrospectResponse.builder()
                 .valid(isValid)
+                .scope(scope)
+                .subject(subject)
                 .build();
     }
 
@@ -313,6 +336,92 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         }
     }
 
+    @Override
+    public UserResponse findUserForReset(String identifier) {
+        User user = userRepository.findByEmailOrPhone(identifier)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+
+        return UserResponse.builder()
+                .email(maskString(user.getEmail()))
+                .phone(maskString(user.getPhone()))
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public void sendOtpForReset(SendOtpRequest request) {
+        User user = userRepository.findByEmailOrPhone(request.getIdentifier())
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+
+        String otpCode = generateAndSaveOtp(user, request.getIdentifier(), OtpType.FORGOT_PASSWORD);
+
+        if (request.getIdentifier().contains("@")) {
+            eventPublisher.publishEvent(new EmailOtpEvent(user.getEmail(), otpCode));
+        } else {
+            eventPublisher.publishEvent(new SmsOtpEvent(user.getPhone(), otpCode));
+        }
+    }
+
+    @Override
+    @Transactional
+    public void verifyOtpForReset(VerifyOtpRequest request) {
+        User user = userRepository.findByEmailOrPhone(request.getIdentifier())
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+
+        VerificationOtpCode latestOtp = verificationOtpCodeRepository
+                .findTopByUserAndTypeAndIsUsedFalseOrderByCreatedAtDesc(user, OtpType.FORGOT_PASSWORD)
+                .orElseThrow(() -> new AppException(ErrorCode.NO_ACTIVE_OTP_FOUND));
+
+        if (latestOtp.getExpiryAt().isBefore(Instant.now())) {
+            throw new AppException(ErrorCode.OTP_EXPIRED);
+        }
+
+        if (!latestOtp.getOtpCode().equals(request.getOtpCode())) {
+            otpLockoutManager.recordFailedAttempt(latestOtp, user);
+            int remaining = 5 - latestOtp.getAttemptCount();
+            throw new RuntimeException("Mã OTP sai. Bạn còn " + Math.max(0, remaining) + " lần thử.");
+        }
+
+        latestOtp.setExpiryAt(Instant.now().plus(Duration.ofMinutes(15)));
+        verificationOtpCodeRepository.save(latestOtp);
+        log.info("OTP hợp lệ. Đã gia hạn đến: {} để User đổi mật khẩu", latestOtp.getExpiryAt());
+    }
+
+    @Override
+    @Transactional
+    public void resetPassword(ResetPasswordRequest request) {
+        if (!request.getNewPassword().equals(request.getConfirmPassword())) {
+            throw new AppException(ErrorCode.PASSWORD_NOT_MATCHED);
+        }
+
+        User user = userRepository.findByEmailOrPhone(request.getLoginIdentifier())
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+
+        VerificationOtpCode latestOtp = verificationOtpCodeRepository
+                .findTopByUserAndTypeAndIsUsedFalseOrderByCreatedAtDesc(user, OtpType.FORGOT_PASSWORD)
+                .orElseThrow(() -> new AppException(ErrorCode.NO_ACTIVE_OTP_FOUND));
+
+        if (!latestOtp.getOtpCode().equals(request.getOtp())) {
+            throw new AppException(ErrorCode.INVALID_OTP);
+        }
+
+        if (latestOtp.getExpiryAt().isBefore(Instant.now())) {
+            throw new AppException(ErrorCode.OTP_EXPIRED);
+        }
+
+        // 5. Đổi pass và xóa dấu vết
+        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        user.setFailedAttemptCount(0);
+        user.setLockedUntil(null);
+        userRepository.save(user);
+
+        latestOtp.setUsed(true);
+        verificationOtpCodeRepository.save(latestOtp);
+
+        log.info("Mật khẩu của User {} đã được đặt lại an toàn.", request.getLoginIdentifier());
+    }
+
+
     /*============================================================================================================*/
     private String generateAndSaveToken(User user) {
 
@@ -329,9 +438,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         return token;
     }
 
-    private String generateAndSaveOtp(User user) {
-//        verificationOtpCodeRepository.deleteByUser(user);
-//        verificationOtpCodeRepository.flush();
+    private String generateAndSaveOtp(User user, String identifier, OtpType type) {
 
         SecureRandom secureRandom = new SecureRandom();
         String otpCode = String.format("%06d", secureRandom.nextInt(900000) + 100000);
@@ -339,6 +446,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         VerificationOtpCode verificationOtpCode = VerificationOtpCode.builder()
                 .otpCode(otpCode)
                 .user(user)
+                .type(type)
                 .expiryAt(Instant.now().plus(Duration.ofSeconds(120)))
                 .attemptCount(0)
                 .resendCount(0)
@@ -348,7 +456,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         verificationOtpCodeRepository.save(verificationOtpCode);
 
-        log.info("Tạo OTP cho SDT: {}", user.getPhone());
+        log.info("Tạo OTP [{}] cho: {}", type, identifier);
 
         return otpCode;
 
@@ -366,4 +474,22 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 //        }
 //        return cleaned;
 //    }
+
+    private String maskString(String input) {
+        if (input == null || input.isEmpty()) return "";
+
+        if (input.contains("@")) {
+            String[] parts = input.split("@");
+            String name = parts[0];
+            String domain = parts[1];
+            if (name.length() <= 2) return input;
+            return name.substring(0, 2) + "***@" + domain;
+        }
+
+        if (input.length() >= 9) {
+            return input.substring(0, 3) + "****" + input.substring(input.length() - 3);
+        }
+
+        return "******";
+    }
 }

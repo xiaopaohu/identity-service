@@ -5,6 +5,7 @@ import com.datn.identityservice.dto.request.AdminCreateUserRequest;
 import com.datn.identityservice.dto.request.AdminUserUpdateRequest;
 import com.datn.identityservice.dto.request.EmailRegisterRequest;
 import com.datn.identityservice.dto.request.PhoneRegisterRequest;
+import com.datn.identityservice.dto.response.AdminUserResponse;
 import com.datn.identityservice.dto.response.UserResponse;
 import com.datn.identityservice.entity.User;
 import com.datn.identityservice.entity.UserRole;
@@ -51,6 +52,9 @@ public interface UserMapper {
                 .map(ur -> ur.getRole().getName())
                 .collect(Collectors.toSet());
     }
+
+    @InheritConfiguration(name = "toUserResponse")
+    AdminUserResponse toAdminUserResponse(User user);
 
 //    // 4. Trả về Audit Log
 //    AuditLogResponse toAuditLogResponse(AuditLog auditLog);
