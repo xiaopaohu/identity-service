@@ -69,7 +69,17 @@ public class JwtProvider {
         return REFRESH_TOKEN_EXPIRY;
     }
 
+    //    private String buildScope(User user) {
+//        return "";
+//    }
     private String buildScope(User user) {
-        return "";
+        if (user.getUserRoles() == null || user.getUserRoles().isEmpty()) {
+            return "";
+        }
+        return user.getUserRoles().stream()
+                .map(userRole -> userRole.getRole().getName())
+                .filter(name -> name != null && !name.isEmpty())
+                .reduce("", (s1, s2) -> s1 + " " + s2)
+                .trim();
     }
 }

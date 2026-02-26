@@ -2,6 +2,7 @@ package com.datn.identityservice.configuration;
 
 import com.datn.identityservice.dto.request.IntrospectRequest;
 import com.datn.identityservice.service.AuthenticationService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
@@ -14,6 +15,8 @@ import org.springframework.stereotype.Component;
 
 import javax.crypto.spec.SecretKeySpec;
 import java.util.Objects;
+
+@Slf4j
 
 @Component
 public class CustomJwtDecoder implements JwtDecoder {
@@ -29,6 +32,8 @@ public class CustomJwtDecoder implements JwtDecoder {
 
     @Override
     public Jwt decode(String token) throws JwtException {
+        log.info("Token received for decoding: {}", token);
+        String actualToken = token.startsWith("Bearer ") ? token.substring(7) : token;
         var response = authenticationService.introspect(
                 IntrospectRequest.builder()
                         .token(token)

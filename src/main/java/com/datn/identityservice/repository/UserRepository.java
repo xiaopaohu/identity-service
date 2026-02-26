@@ -35,6 +35,9 @@ public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificat
     @Query("SELECT u FROM User u WHERE u.status = 'PENDING_DELETION' AND u.deletedAt <= :threshold")
     List<User> findExpiredSoftDeletedUsers(@Param("threshold") LocalDateTime threshold);
 
+    @Query("SELECT u FROM User u LEFT JOIN FETCH u.userRoles ur LEFT JOIN FETCH ur.role WHERE u.email = :email")
+    Optional<User> findByEmailWithRoles(String email);
+
     @Modifying
     @Transactional
     long deleteByStatusAndCreatedAtBefore(String status, Instant dateTime);

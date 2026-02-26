@@ -222,6 +222,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     }
 
     @Override
+    @Transactional
     public AuthenticationResponse authenticate(AuthenticationRequest request) {
         User user = userRepository.findByEmailOrPhone(request.getLoginIdentifier())
                 .orElseThrow(() -> new RuntimeException("USER_NOT_FOUND"));
